@@ -1,4 +1,5 @@
 use axum::Json;
+use axum::http::StatusCode;
 use base64::{Engine as _, engine::general_purpose};
 use serde_json::{Value, json};
 use solana_sdk::{
@@ -50,24 +51,47 @@ pub async fn post_keypair() -> Json<Value> {
     Json(json!(response))
 }
 
-pub async fn post_create_token(Json(payload): Json<CreateTokenRequest>) -> Json<serde_json::Value> {
+pub async fn post_create_token(
+    Json(payload): Json<CreateTokenRequest>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    if payload.decimals > u8::MAX as u64 {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(json!(ErrorResponse { success: false, error: "Invalid decimals value".to_string() })),
+        ));
+    }
+    if payload.mintAuthority.is_empty() || payload.mint.is_empty() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(json!(ErrorResponse {
+                success: false,
+                error: "Missing required fields".to_string()
+            })),
+        ));
+    }
     let mint_authority_pubkey = match Pubkey::from_str(&payload.mintAuthority) {
         Ok(pubkey) => pubkey,
         Err(_) => {
-            return Json(json!(ErrorResponse {
-                success: false,
-                error: "Description of error".to_string(),
-            }));
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(json!(ErrorResponse {
+                    success: false,
+                    error: "Invalid mintAuthority".to_string()
+                })),
+            ));
         }
     };
 
     let mint_pubkey = match Pubkey::from_str(&payload.mint) {
         Ok(pubkey) => pubkey,
         Err(_) => {
-            return Json(json!(ErrorResponse {
-                success: false,
-                error: "Description of error".to_string(),
-            }));
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(json!(ErrorResponse {
+                    success: false,
+                    error: "Invalid mint".to_string()
+                })),
+            ));
         }
     };
 
@@ -80,10 +104,13 @@ pub async fn post_create_token(Json(payload): Json<CreateTokenRequest>) -> Json<
     ) {
         Ok(inst) => inst,
         Err(_) => {
-            return Json(json!(ErrorResponse {
-                success: false,
-                error: "Description of error".to_string(),
-            }));
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(json!(ErrorResponse {
+                    success: false,
+                    error: "Failed to create instruction".to_string()
+                })),
+            ));
         }
     };
 
@@ -100,37 +127,64 @@ pub async fn post_create_token(Json(payload): Json<CreateTokenRequest>) -> Json<
         },
     };
 
-    Json(json!(response))
+    Ok(Json(json!(response)))
 }
 
-pub async fn post_mint_token(Json(payload): Json<MintTokenRequest>) -> Json<serde_json::Value> {
+pub async fn post_mint_token(
+    Json(payload): Json<MintTokenRequest>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    if payload.amount == 0 {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(json!(ErrorResponse { success: false, error: "Invalid amount".to_string() })),
+        ));
+    }
+    if payload.mint.is_empty() || payload.destination.is_empty() || payload.authority.is_empty() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(json!(ErrorResponse {
+                success: false,
+                error: "Missing required fields".to_string()
+            })),
+        ));
+    }
+
     let mint_pubkey = match Pubkey::from_str(&payload.mint) {
         Ok(pubkey) => pubkey,
         Err(_) => {
-            return Json(json!(ErrorResponse {
-                success: false,
-                error: "Description of error".to_string(),
-            }));
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(json!(ErrorResponse {
+                    success: false,
+                    error: "Invalid mint".to_string()
+                })),
+            ));
         }
     };
 
     let destination_pubkey = match Pubkey::from_str(&payload.destination) {
         Ok(pubkey) => pubkey,
         Err(_) => {
-            return Json(json!(ErrorResponse {
-                success: false,
-                error: "Description of error".to_string(),
-            }));
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(json!(ErrorResponse {
+                    success: false,
+                    error: "Invalid destination".to_string()
+                })),
+            ));
         }
     };
 
     let authority_pubkey = match Pubkey::from_str(&payload.authority) {
         Ok(pubkey) => pubkey,
         Err(_) => {
-            return Json(json!(ErrorResponse {
-                success: false,
-                error: "Description of error".to_string(),
-            }));
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(json!(ErrorResponse {
+                    success: false,
+                    error: "Invalid authority".to_string()
+                })),
+            ));
         }
     };
 
@@ -144,10 +198,13 @@ pub async fn post_mint_token(Json(payload): Json<MintTokenRequest>) -> Json<serd
     ) {
         Ok(inst) => inst,
         Err(_) => {
-            return Json(json!(ErrorResponse {
-                success: false,
-                error: "Description of error".to_string(),
-            }));
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(json!(ErrorResponse {
+                    success: false,
+                    error: "Failed to create instruction".to_string()
+                })),
+            ));
         }
     };
 
@@ -164,27 +221,45 @@ pub async fn post_mint_token(Json(payload): Json<MintTokenRequest>) -> Json<serd
         },
     };
 
-    Json(json!(response))
+    Ok(Json(json!(response)))
 }
 
-pub async fn post_sign_message(Json(payload): Json<SignMessageRequest>) -> Json<serde_json::Value> {
+pub async fn post_sign_message(
+    Json(payload): Json<SignMessageRequest>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    if payload.message.is_empty() || payload.secret.is_empty() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(json!(ErrorResponse {
+                success: false,
+                error: "Missing required fields".to_string()
+            })),
+        ));
+    }
+
     let keypair_bytes = match bs58::decode(&payload.secret).into_vec() {
         Ok(bytes) => bytes,
         Err(_) => {
-            return Json(json!(ErrorResponse {
-                success: false,
-                error: "Description of error".to_string(),
-            }));
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(json!(ErrorResponse {
+                    success: false,
+                    error: "Invalid secret".to_string()
+                })),
+            ));
         }
     };
 
     let keypair = match Keypair::from_bytes(&keypair_bytes) {
         Ok(kp) => kp,
         Err(_) => {
-            return Json(json!(ErrorResponse {
-                success: false,
-                error: "Description of error".to_string(),
-            }));
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(json!(ErrorResponse {
+                    success: false,
+                    error: "Invalid keypair".to_string()
+                })),
+            ));
         }
     };
 
@@ -200,39 +275,58 @@ pub async fn post_sign_message(Json(payload): Json<SignMessageRequest>) -> Json<
         },
     };
 
-    Json(json!(response))
+    Ok(Json(json!(response)))
 }
 
 pub async fn post_verify_message(
     Json(payload): Json<VerifyMessageRequest>,
-) -> Json<serde_json::Value> {
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    if payload.message.is_empty() || payload.signature.is_empty() || payload.pubkey.is_empty() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(json!(ErrorResponse {
+                success: false,
+                error: "Missing required fields".to_string()
+            })),
+        ));
+    }
+
     let pubkey = match Pubkey::from_str(&payload.pubkey) {
         Ok(pk) => pk,
         Err(_) => {
-            return Json(json!(ErrorResponse {
-                success: false,
-                error: "Description of error".to_string(),
-            }));
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(json!(ErrorResponse {
+                    success: false,
+                    error: "Invalid pubkey".to_string()
+                })),
+            ));
         }
     };
 
     let signature_bytes = match general_purpose::STANDARD.decode(&payload.signature) {
         Ok(bytes) => bytes,
         Err(_) => {
-            return Json(json!(ErrorResponse {
-                success: false,
-                error: "Description of error".to_string(),
-            }));
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(json!(ErrorResponse {
+                    success: false,
+                    error: "Invalid signature".to_string()
+                })),
+            ));
         }
     };
 
     let signature = match Signature::try_from(signature_bytes.as_slice()) {
         Ok(sig) => sig,
         Err(_) => {
-            return Json(json!(ErrorResponse {
-                success: false,
-                error: "Description of error".to_string(),
-            }));
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(json!(ErrorResponse {
+                    success: false,
+                    error: "Invalid signature".to_string()
+                })),
+            ));
         }
     };
 
@@ -248,27 +342,60 @@ pub async fn post_verify_message(
         },
     };
 
-    Json(json!(response))
+    Ok(Json(json!(response)))
 }
 
-pub async fn post_sol_send(Json(payload): Json<SendSolRequest>) -> Json<serde_json::Value> {
+pub async fn post_sol_send(
+    Json(payload): Json<SendSolRequest>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    if payload.from.is_empty() || payload.to.is_empty() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(json!(ErrorResponse {
+                success: false,
+                error: "Missing required fields".to_string()
+            })),
+        ));
+    }
+    if payload.lamports == 0 {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(json!(ErrorResponse {
+                success: false,
+                error: "Invalid lamports amount".to_string()
+            })),
+        ));
+    }
+    if payload.from == payload.to {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(json!(ErrorResponse { success: false, error: "Source and destination must differ".to_string() })),
+        ));
+    }
+
     let from_pubkey = match Pubkey::from_str(&payload.from) {
         Ok(pk) => pk,
         Err(_) => {
-            return Json(json!(ErrorResponse {
-                success: false,
-                error: "Description of error".to_string(),
-            }));
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(json!(ErrorResponse {
+                    success: false,
+                    error: "Invalid from pubkey".to_string()
+                })),
+            ));
         }
     };
 
     let to_pubkey = match Pubkey::from_str(&payload.to) {
         Ok(pk) => pk,
         Err(_) => {
-            return Json(json!(ErrorResponse {
-                success: false,
-                error: "Description of error".to_string(),
-            }));
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(json!(ErrorResponse {
+                    success: false,
+                    error: "Invalid to pubkey".to_string()
+                })),
+            ));
         }
     };
 
@@ -287,37 +414,73 @@ pub async fn post_sol_send(Json(payload): Json<SendSolRequest>) -> Json<serde_js
         },
     };
 
-    Json(json!(response))
+    Ok(Json(json!(response)))
 }
 
-pub async fn post_token_send(Json(payload): Json<SendTokenRequest>) -> Json<serde_json::Value> {
+pub async fn post_token_send(
+    Json(payload): Json<SendTokenRequest>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    if payload.destination.is_empty() || payload.mint.is_empty() || payload.owner.is_empty() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(json!(ErrorResponse {
+                success: false,
+                error: "Missing required fields".to_string()
+            })),
+        ));
+    }
+    if payload.amount == 0 {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(json!(ErrorResponse {
+                success: false,
+                error: "Invalid amount".to_string()
+            })),
+        ));
+    }
+    if payload.owner == payload.destination {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(json!(ErrorResponse { success: false, error: "Owner and destination must differ".to_string() })),
+        ));
+    }
+
     let _mint_pubkey = match Pubkey::from_str(&payload.mint) {
         Ok(pk) => pk,
         Err(_) => {
-            return Json(json!(ErrorResponse {
-                success: false,
-                error: "Description of error".to_string(),
-            }));
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(json!(ErrorResponse {
+                    success: false,
+                    error: "Invalid mint".to_string()
+                })),
+            ));
         }
     };
 
     let owner_pubkey = match Pubkey::from_str(&payload.owner) {
         Ok(pk) => pk,
         Err(_) => {
-            return Json(json!(ErrorResponse {
-                success: false,
-                error: "Description of error".to_string(),
-            }));
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(json!(ErrorResponse {
+                    success: false,
+                    error: "Invalid owner".to_string()
+                })),
+            ));
         }
     };
 
     let destination_pubkey = match Pubkey::from_str(&payload.destination) {
         Ok(pk) => pk,
         Err(_) => {
-            return Json(json!(ErrorResponse {
-                success: false,
-                error: "Description of error".to_string(),
-            }));
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(json!(ErrorResponse {
+                    success: false,
+                    error: "Invalid destination".to_string()
+                })),
+            ));
         }
     };
 
@@ -331,10 +494,13 @@ pub async fn post_token_send(Json(payload): Json<SendTokenRequest>) -> Json<serd
     ) {
         Ok(inst) => inst,
         Err(_) => {
-            return Json(json!(ErrorResponse {
-                success: false,
-                error: "Description of error".to_string(),
-            }));
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(json!(ErrorResponse {
+                    success: false,
+                    error: "Failed to create instruction".to_string()
+                })),
+            ));
         }
     };
 
@@ -351,5 +517,5 @@ pub async fn post_token_send(Json(payload): Json<SendTokenRequest>) -> Json<serd
         },
     };
 
-    Json(json!(response))
+    Ok(Json(json!(response)))
 }
