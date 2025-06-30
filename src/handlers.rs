@@ -38,7 +38,7 @@ fn convert_account_meta_simple(
     }
 }
 
-pub async fn post_keypair() -> Json<Value> {
+pub async fn post_keypair() -> (StatusCode, Json<Value>) {
     let keypair = Keypair::new();
     let pubkey = keypair.pubkey().to_string();
     let secret = bs58::encode(keypair.to_bytes()).into_string();
@@ -48,16 +48,28 @@ pub async fn post_keypair() -> Json<Value> {
         data: GenerateKeypairResponse { pubkey, secret },
     };
 
-    Json(json!(response))
+    (StatusCode::OK, Json(json!(response)))
 }
 
 pub async fn post_create_token(
     Json(payload): Json<CreateTokenRequest>,
-) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+) -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<serde_json::Value>)> {
     if payload.decimals > u8::MAX as u64 {
         return Err((
             StatusCode::BAD_REQUEST,
-            Json(json!(ErrorResponse { success: false, error: "Invalid decimals value".to_string() })),
+            Json(json!(ErrorResponse {
+                success: false,
+                error: "Invalid decimals value".to_string()
+            })),
+        ));
+    }
+    if payload.mintAuthority == payload.mint {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(json!(ErrorResponse {
+                success: false,
+                error: "Mint authority and mint must differ".to_string()
+            })),
         ));
     }
     if payload.mintAuthority.is_empty() || payload.mint.is_empty() {
@@ -127,16 +139,19 @@ pub async fn post_create_token(
         },
     };
 
-    Ok(Json(json!(response)))
+    Ok((StatusCode::OK, Json(json!(response))))
 }
 
 pub async fn post_mint_token(
     Json(payload): Json<MintTokenRequest>,
-) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+) -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<serde_json::Value>)> {
     if payload.amount == 0 {
         return Err((
             StatusCode::BAD_REQUEST,
-            Json(json!(ErrorResponse { success: false, error: "Invalid amount".to_string() })),
+            Json(json!(ErrorResponse {
+                success: false,
+                error: "Invalid amount".to_string()
+            })),
         ));
     }
     if payload.mint.is_empty() || payload.destination.is_empty() || payload.authority.is_empty() {
@@ -221,12 +236,12 @@ pub async fn post_mint_token(
         },
     };
 
-    Ok(Json(json!(response)))
+    Ok((StatusCode::OK, Json(json!(response))))
 }
 
 pub async fn post_sign_message(
     Json(payload): Json<SignMessageRequest>,
-) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+) -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<serde_json::Value>)> {
     if payload.message.is_empty() || payload.secret.is_empty() {
         return Err((
             StatusCode::BAD_REQUEST,
@@ -275,12 +290,12 @@ pub async fn post_sign_message(
         },
     };
 
-    Ok(Json(json!(response)))
+    Ok((StatusCode::OK, Json(json!(response))))
 }
 
 pub async fn post_verify_message(
     Json(payload): Json<VerifyMessageRequest>,
-) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+) -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<serde_json::Value>)> {
     if payload.message.is_empty() || payload.signature.is_empty() || payload.pubkey.is_empty() {
         return Err((
             StatusCode::BAD_REQUEST,
@@ -342,12 +357,12 @@ pub async fn post_verify_message(
         },
     };
 
-    Ok(Json(json!(response)))
+    Ok((StatusCode::OK, Json(json!(response))))
 }
 
 pub async fn post_sol_send(
     Json(payload): Json<SendSolRequest>,
-) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+) -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<serde_json::Value>)> {
     if payload.from.is_empty() || payload.to.is_empty() {
         return Err((
             StatusCode::BAD_REQUEST,
@@ -369,7 +384,10 @@ pub async fn post_sol_send(
     if payload.from == payload.to {
         return Err((
             StatusCode::BAD_REQUEST,
-            Json(json!(ErrorResponse { success: false, error: "Source and destination must differ".to_string() })),
+            Json(json!(ErrorResponse {
+                success: false,
+                error: "Source and destination must differ".to_string()
+            })),
         ));
     }
 
@@ -414,12 +432,12 @@ pub async fn post_sol_send(
         },
     };
 
-    Ok(Json(json!(response)))
+    Ok((StatusCode::OK, Json(json!(response))))
 }
 
 pub async fn post_token_send(
     Json(payload): Json<SendTokenRequest>,
-) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+) -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<serde_json::Value>)> {
     if payload.destination.is_empty() || payload.mint.is_empty() || payload.owner.is_empty() {
         return Err((
             StatusCode::BAD_REQUEST,
@@ -438,10 +456,22 @@ pub async fn post_token_send(
             })),
         ));
     }
+    if payload.mint == payload.owner || payload.mint == payload.destination {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(json!(ErrorResponse {
+                success: false,
+                error: "Mint must differ from owner and destination".to_string()
+            })),
+        ));
+    }
     if payload.owner == payload.destination {
         return Err((
             StatusCode::BAD_REQUEST,
-            Json(json!(ErrorResponse { success: false, error: "Owner and destination must differ".to_string() })),
+            Json(json!(ErrorResponse {
+                success: false,
+                error: "Owner and destination must differ".to_string()
+            })),
         ));
     }
 
@@ -517,5 +547,5 @@ pub async fn post_token_send(
         },
     };
 
-    Ok(Json(json!(response)))
+    Ok((StatusCode::OK, Json(json!(response))))
 }
