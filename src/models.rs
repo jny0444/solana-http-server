@@ -20,9 +20,9 @@ pub struct GenerateKeypairResponse {
 
 #[derive(Deserialize)]
 pub struct CreateTokenRequest {
-    mintAuthority: String,
-    mint: String,
-    decimals: u64,
+    pub mintAuthority: String,
+    pub mint: String,
+    pub decimals: u64,
 }
 
 #[derive(Serialize)]
